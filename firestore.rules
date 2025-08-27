@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isOwnerOrAdmin(userId) {
+      return isOwner(userId) || request.auth.token.admin == true;
+    }
+    
+    function isValidUserData(data) {
+      return data.keys().hasAll(['name', 'email', 'stream', 'semester']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.email is string && data.email.matches('.*@.*') &&
+             data.stream in ['General', 'Computer Applications'] &&
+             data.semester in [1, 2, 3, 4, 5, 6];
+    }
+    
+    function isValidStudyPlan(data) {
+      return data.keys().hasAll(['userId', 'title', 'subjects', 'examDate']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.title is string && data.title.size() > 0 &&
+             data.subjects is list && data.subjects.size() > 0;
+    }
+    
+    function isValidTestAttempt(data) {
+      return data.keys().hasAll(['userId', 'testId', 'score', 'totalMarks']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.testId is string && data.testId.size() > 0 &&
+             data.score is number && data.score >= 0 && data.score <= 100 &&
+             data.totalMarks is number && data.totalMarks > 0;
+    }
+
+    // Users collection - users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUserData(resource.data);
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUserData(resource.data);
+    }
+    
+    // Study plans - user-specific
+    match /studyPlans/{planId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidStudyPlan(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isValidStudyPlan(request.resource.data);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // Test attempts - user-specific
+    match /testAttempts/{attemptId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidTestAttempt(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isValidTestAttempt(request.resource.data);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // Performance data - user-specific
+    match /performance/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // AI tutor sessions - user-specific
+    match /aiTutorSessions/{sessionId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // Practice tests - read-only for authenticated users, admin write
+    match /practiceTests/{testId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.token.admin == true;
+    }
+    
+    // Subjects - read-only for authenticated users, admin write
+    match /subjects/{subjectId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.token.admin == true;
+    }
+    
+    // User activities - user-specific
+    match /userActivities/{activityId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+    }
+    
+    // User behavior events - user-specific
+    match /userBehaviorEvents/{eventId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+    }
+    
+    // User sessions - user-specific
+    match /userSessions/{sessionId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+    }
+    
+    // User analytics - user-specific
+    match /userAnalytics/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Admin-only collections
+    match /admin/{document=**} {
+      allow read, write: if isAuthenticated() && request.auth.token.admin == true;
+    }
+    
+    // Analytics - read-only for authenticated users, admin write
+    match /analytics/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.token.admin == true;
+    }
+    
+    // Rate limiting for AI requests
+    match /aiRequests/{requestId} {
+      allow read, write: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && 
+        isOwner(request.resource.data.userId) && 
+        request.resource.data.timestamp > timestamp.date(2024, 1, 1);
+    }
+  }
+}
