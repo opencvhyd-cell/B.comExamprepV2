@@ -16,18 +16,19 @@ interface Message {
   summaries?: {
     long: string;
     short: string;
+    longVisible?: boolean;
+    shortVisible?: boolean;
   };
 }
 
 export default function EnhancedAITutor() {
-  const { userProfile, loading } = useAuth();
+  const { userProfile, loading, currentUser } = useAuth();
   const { 
     tutorState, 
     startSession, 
     endSession, 
     recordQuestion, 
     recordHint,
-
     getAdaptiveDifficulty,
     getLearningStyleSuggestion
   } = useAITutor();
@@ -41,9 +42,22 @@ export default function EnhancedAITutor() {
   const [aiServiceStatus, setAiServiceStatus] = useState<'active' | 'fallback' | 'error'>('active');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [copiedSummaryId, setCopiedSummaryId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Get current active subjects
+  const getCurrentActiveSubjects = useCallback((): Subject[] => {
+    if (!userProfile) return [];
+    return subjectMappingService.getSubjectsForSemester(userProfile.stream, userProfile.year, userProfile.semester);
+  }, [userProfile]);
+
+  // Get current active subject (first one for summary purposes)
+  const getCurrentActiveSubject = useCallback((): Subject | null => {
+    const subjects = getCurrentActiveSubjects();
+    return subjects.length > 0 ? subjects[0] : null;
+  }, [getCurrentActiveSubjects]);
 
   // Copy message content to clipboard
   const copyMessage = useCallback(async (content: string, messageId: string) => {
@@ -67,7 +81,7 @@ export default function EnhancedAITutor() {
     }
   }, []);
 
-  // Generate specific summary
+  // Handle summary generation
   const handleGenerateSummary = useCallback(async (messageId: string, summaryType: 'long' | 'short') => {
     try {
       const message = messages.find(m => m.id === messageId);
@@ -83,26 +97,49 @@ export default function EnhancedAITutor() {
         message.content, 
         userMessage.content, 
         summaryType,
-        { subject: currentTopic }
+        { subject: getCurrentActiveSubject()?.name || '' }
       );
 
-      // Update the message with the new summary
+      // Update the message with the new summary, hide the other type, and set current as visible
       setMessages(prev => prev.map(m => 
         m.id === messageId 
           ? { 
               ...m, 
               summaries: { 
-                ...m.summaries, 
-                [summaryType]: summary 
+                ...m.summaries, // Keep existing summaries
+                [summaryType]: summary, // Add/update current summary
+                [`${summaryType}Visible`]: true, // Make current summary visible
+                [`${summaryType === 'short' ? 'long' : 'short'}Visible`]: false // Hide other summary
               } 
             }
           : m
       ));
 
+      // Track summary generation (simplified without userBehaviorService)
+      if (currentUser) {
+        console.log('Summary generated:', { summaryType, messageId, subject: getCurrentActiveSubject()?.name || '' });
+      }
+
     } catch (error) {
       console.error('Failed to generate summary:', error);
+      setError('Failed to generate summary. Please try again.');
     }
-  }, [messages, currentTopic]);
+  }, [messages, currentUser, aiService, getCurrentActiveSubject, setError]);
+
+  // Toggle summary visibility
+  const handleToggleSummary = useCallback((messageId: string, summaryType: 'long' | 'short') => {
+    setMessages(prev => prev.map(m => 
+      m.id === messageId 
+        ? { 
+            ...m, 
+            summaries: { 
+              ...m.summaries, 
+              [`${summaryType}Visible`]: !m.summaries![`${summaryType}Visible`]
+            } 
+          }
+        : m
+    ));
+  }, []);
 
   // Check if message is a welcome message
   const isWelcomeMessage = useCallback((content: string): boolean => {
@@ -473,6 +510,32 @@ What specific aspect of ${topic} would you like to explore first?`,
           </div>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-400 p-4 mx-6 mt-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+              <div className="ml-auto pl-3">
+                <button
+                  onClick={() => setError(null)}
+                  className="inline-flex text-red-400 hover:text-red-600"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Content */}
         <div className="flex h-[600px]">
           {/* Chat Area */}
@@ -629,48 +692,73 @@ What specific aspect of ${topic} would you like to explore first?`,
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Short Summary Option */}
-                          <div className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-600 p-3 hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
-                            <div className="flex items-center justify-between mb-3">
+                          {/* Short Summary Option - Always show, control visibility */}
+                          <div className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-600 p-4 hover:border-blue-300 dark:hover:border-blue-500 transition-colors flex flex-col h-full min-h-[200px]">
+                            <div className="flex items-center justify-between mb-4">
                               <h5 className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center">
-                                <Minus className="w-3 h-3 mr-1" />
+                                <Minus className="w-4 h-4 mr-2" />
                                 Short Summary
                               </h5>
-                              <span className="text-xs text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 px-2 py-0.5 rounded-full">
+                              <span className="text-xs text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 px-3 py-1 rounded-full font-medium">
                                 Quick Overview
                               </span>
                             </div>
                             
                             {message.summaries?.short ? (
-                              <div>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3">
-                                  {message.summaries.short}
-                                </p>
+                              <div className="flex-1 flex flex-col">
+                                {/* Toggle Button - Click to show/hide this summary */}
                                 <button
-                                  onClick={() => copySummary(message.summaries!.short, `${message.id}-short`)}
-                                  className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-blue-50 dark:bg-blue-800 hover:bg-blue-100 dark:hover:bg-blue-700 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-600 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-200 text-sm font-medium"
+                                  onClick={() => handleToggleSummary(message.id, 'short')}
+                                  className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg border transition-all duration-200 text-sm font-medium mb-3 ${
+                                    message.summaries?.shortVisible 
+                                      ? 'bg-blue-100 dark:bg-blue-800 hover:bg-blue-200 dark:hover:bg-blue-700 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600 hover:border-blue-400 dark:hover:border-blue-500' 
+                                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                                  }`}
                                 >
-                                  {copiedSummaryId === `${message.id}-short` ? (
+                                  {message.summaries?.shortVisible ? (
                                     <>
-                                      <Check className="w-4 h-4 text-green-600" />
-                                      <span>Copied!</span>
+                                      <span>Hide Short Summary</span>
                                     </>
                                   ) : (
                                     <>
-                                      <Copy className="w-4 h-4" />
-                                      <span>Copy Summary</span>
+                                      <span>Show Short Summary</span>
                                     </>
                                   )}
                                 </button>
+                                
+                                {/* Summary Content - Visible when shortVisible is true */}
+                                {message.summaries?.shortVisible && (
+                                  <>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4 flex-1">
+                                      {message.summaries.short}
+                                    </p>
+                                    <button
+                                      onClick={() => copySummary(message.summaries!.short, `${message.id}-short`)}
+                                      className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 dark:bg-blue-800 hover:bg-blue-100 dark:hover:bg-blue-700 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-600 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-200 text-sm font-medium mt-auto"
+                                    >
+                                      {copiedSummaryId === `${message.id}-short` ? (
+                                        <>
+                                          <Check className="w-4 h-4 text-green-600" />
+                                          <span>Copied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-4 h-4" />
+                                          <span>Copy Summary</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             ) : (
-                              <div className="text-center">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                              <div className="text-center flex-1 flex flex-col justify-center">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                   Generate a concise 2-3 sentence summary
                                 </p>
                                 <button
                                   onClick={() => handleGenerateSummary(message.id, 'short')}
-                                  className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                  className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
                                 >
                                   Generate Short Summary
                                 </button>
@@ -678,48 +766,73 @@ What specific aspect of ${topic} would you like to explore first?`,
                             )}
                           </div>
                           
-                          {/* Long Summary Option */}
-                          <div className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-600 p-3 hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
-                            <div className="flex items-center justify-between mb-3">
+                          {/* Long Summary Option - Always show, control visibility */}
+                          <div className="bg-white dark:bg-gray-800 rounded-lg border border-blue-200 dark:border-blue-600 p-4 hover:border-blue-300 dark:hover:border-blue-500 transition-colors flex flex-col h-full min-h-[200px]">
+                            <div className="flex items-center justify-between mb-4">
                               <h5 className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center">
-                                <FileText className="w-3 h-3 mr-1" />
+                                <FileText className="w-4 h-4 mr-2" />
                                 Long Summary
                               </h5>
-                              <span className="text-xs text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 px-2 py-0.5 rounded-full">
+                              <span className="text-xs text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-900 px-3 py-1 rounded-full font-medium">
                                 Detailed Overview
                               </span>
                             </div>
                             
                             {message.summaries?.long ? (
-                              <div>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-3">
-                                  {message.summaries.long}
-                                </p>
+                              <div className="flex-1 flex flex-col">
+                                {/* Toggle Button - Click to show/hide this summary */}
                                 <button
-                                  onClick={() => copySummary(message.summaries!.long, `${message.id}-long`)}
-                                  className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-blue-50 dark:bg-blue-800 hover:bg-blue-100 dark:hover:bg-blue-700 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-600 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-200 text-sm font-medium"
+                                  onClick={() => handleToggleSummary(message.id, 'long')}
+                                  className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg border transition-all duration-200 text-sm font-medium mb-3 ${
+                                    message.summaries?.longVisible 
+                                      ? 'bg-blue-100 dark:bg-blue-800 hover:bg-blue-200 dark:hover:bg-blue-700 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600 hover:border-blue-400 dark:hover:border-blue-500' 
+                                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                                  }`}
                                 >
-                                  {copiedSummaryId === `${message.id}-long` ? (
+                                  {message.summaries?.longVisible ? (
                                     <>
-                                      <Check className="w-4 h-4 text-green-600" />
-                                      <span>Copied!</span>
+                                      <span>Hide Long Summary</span>
                                     </>
                                   ) : (
                                     <>
-                                      <Copy className="w-4 h-4" />
-                                      <span>Copy Summary</span>
+                                      <span>Show Long Summary</span>
                                     </>
                                   )}
                                 </button>
+                                
+                                {/* Summary Content - Visible when longVisible is true */}
+                                {message.summaries?.longVisible && (
+                                  <>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4 flex-1">
+                                      {message.summaries.long}
+                                    </p>
+                                    <button
+                                      onClick={() => copySummary(message.summaries!.long, `${message.id}-long`)}
+                                      className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 dark:bg-blue-800 hover:bg-blue-100 dark:hover:bg-blue-700 text-blue-700 dark:text-blue-300 rounded-lg border border-blue-200 dark:border-blue-600 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-200 text-sm font-medium mt-auto"
+                                    >
+                                      {copiedSummaryId === `${message.id}-long` ? (
+                                        <>
+                                          <Check className="w-4 h-4 text-green-600" />
+                                          <span>Copied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-4 h-4" />
+                                          <span>Copy Summary</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             ) : (
-                              <div className="text-center">
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                              <div className="text-center flex-1 flex flex-col justify-center">
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                                   Generate a detailed 4-6 sentence summary
                                 </p>
                                 <button
                                   onClick={() => handleGenerateSummary(message.id, 'long')}
-                                  className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                                  className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
                                 >
                                   Generate Long Summary
                                 </button>

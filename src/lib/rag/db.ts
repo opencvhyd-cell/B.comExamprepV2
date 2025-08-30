@@ -64,9 +64,6 @@ export interface Source {
 }
 
 export interface DatabaseStats {
-  totalBooks: number;
-  totalChunks: number;
-  totalChatSessions: number;
   books: number;
   chunks: number;
   embeddings: number;

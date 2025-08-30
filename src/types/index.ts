@@ -9,6 +9,8 @@ export interface User {
   joinedAt: string;
 }
 
+export type TabType = 'upload' | 'chat' | 'knowledge';
+
 export interface Subject {
   id: string;
   code: string;
@@ -181,5 +183,7 @@ export interface AIResponse {
   summaries?: {
     long: string;
     short: string;
+    longVisible?: boolean;
+    shortVisible?: boolean;
   };
 }

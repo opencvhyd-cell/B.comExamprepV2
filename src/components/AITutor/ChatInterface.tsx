@@ -7,8 +7,9 @@ interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   isTyping: boolean;
-  onRetry?: () => void;
+  onRetry?: (messageId: string) => void;
   onGenerateSummary?: (messageId: string, summaryType: 'long' | 'short') => void;
+  onToggleSummary?: (messageId: string, summaryType: 'long' | 'short') => void;
 }
 
 export default function ChatInterface({ 
@@ -16,7 +17,8 @@ export default function ChatInterface({
   onSendMessage, 
   isTyping,
   onRetry,
-  onGenerateSummary
+  onGenerateSummary,
+  onToggleSummary
 }: ChatInterfaceProps) {
   const [inputValue, setInputValue] = useState('');
 
@@ -128,48 +130,73 @@ export default function ChatInterface({
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Short Summary Option */}
-                <div className="bg-white rounded-lg border border-blue-200 p-3 hover:border-blue-300 transition-colors">
-                  <div className="flex items-center justify-between mb-3">
+                {/* Short Summary Option - Always show, control visibility */}
+                <div className="bg-white rounded-lg border border-blue-200 p-4 hover:border-blue-300 transition-colors flex flex-col h-full min-h-[200px]">
+                  <div className="flex items-center justify-between mb-4">
                     <h5 className="text-sm font-medium text-blue-700 flex items-center">
-                      <Minus className="w-3 h-3 mr-1" />
+                      <Minus className="w-4 h-4 mr-2" />
                       Short Summary
                     </h5>
-                    <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <span className="text-xs text-blue-500 bg-blue-50 px-3 py-1 rounded-full font-medium">
                       Quick Overview
                     </span>
                   </div>
                   
                   {message.summaries?.short ? (
-                    <div>
-                      <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                        {message.summaries.short}
-                      </p>
+                    <div className="flex-1 flex flex-col">
+                      {/* Toggle Button - Click to show/hide this summary */}
                       <button
-                        onClick={() => copySummary(message.summaries!.short, `${message.id}-short`)}
-                        className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200 text-sm font-medium"
+                        onClick={() => onToggleSummary?.(message.id, 'short')}
+                        className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg border transition-all duration-200 text-sm font-medium mb-3 ${
+                          message.summaries?.shortVisible 
+                            ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border-blue-300 hover:border-blue-400' 
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300 hover:border-gray-400'
+                        }`}
                       >
-                        {copiedSummaryId === `${message.id}-short` ? (
+                        {message.summaries?.shortVisible ? (
                           <>
-                            <Check className="w-4 h-4 text-green-600" />
-                            <span>Copied!</span>
+                            <span>Hide Short Summary</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="w-4 h-4" />
-                            <span>Copy Summary</span>
+                            <span>Show Short Summary</span>
                           </>
                         )}
                       </button>
+                      
+                      {/* Summary Content - Visible when shortVisible is true */}
+                      {message.summaries?.shortVisible && (
+                        <>
+                          <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-1">
+                            {message.summaries.short}
+                          </p>
+                          <button
+                            onClick={() => copySummary(message.summaries!.short, `${message.id}-short`)}
+                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200 text-sm font-medium mt-auto"
+                          >
+                            {copiedSummaryId === `${message.id}-short` ? (
+                              <>
+                                <Check className="w-4 h-4 text-green-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                <span>Copy Summary</span>
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : (
-                    <div className="text-center">
-                      <p className="text-sm text-gray-500 mb-3">
+                    <div className="text-center flex-1 flex flex-col justify-center">
+                      <p className="text-sm text-gray-500 mb-4">
                         Generate a concise 2-3 sentence summary
                       </p>
                       <button
                         onClick={() => onGenerateSummary?.(message.id, 'short')}
-                        className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                        className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
                       >
                         Generate Short Summary
                       </button>
@@ -177,48 +204,73 @@ export default function ChatInterface({
                   )}
                 </div>
                 
-                {/* Long Summary Option */}
-                <div className="bg-white rounded-lg border border-blue-200 p-3 hover:border-blue-300 transition-colors">
-                  <div className="flex items-center justify-between mb-3">
+                {/* Long Summary Option - Always show, control visibility */}
+                <div className="bg-white rounded-lg border border-blue-200 p-4 hover:border-blue-300 transition-colors flex flex-col h-full min-h-[200px]">
+                  <div className="flex items-center justify-between mb-4">
                     <h5 className="text-sm font-medium text-blue-700 flex items-center">
-                      <FileText className="w-3 h-3 mr-1" />
+                      <FileText className="w-4 h-4 mr-2" />
                       Long Summary
                     </h5>
-                    <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <span className="text-xs text-blue-500 bg-blue-50 px-3 py-1 rounded-full font-medium">
                       Detailed Overview
                     </span>
                   </div>
                   
                   {message.summaries?.long ? (
-                    <div>
-                      <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                        {message.summaries.long}
-                      </p>
+                    <div className="flex-1 flex flex-col">
+                      {/* Toggle Button - Click to show/hide this summary */}
                       <button
-                        onClick={() => copySummary(message.summaries!.long, `${message.id}-long`)}
-                        className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200 text-sm font-medium"
+                        onClick={() => onToggleSummary?.(message.id, 'long')}
+                        className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg border transition-all duration-200 text-sm font-medium mb-3 ${
+                          message.summaries?.longVisible 
+                            ? 'bg-blue-100 hover:bg-blue-200 text-blue-700 border-blue-300 hover:border-blue-400' 
+                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300 hover:border-gray-400'
+                        }`}
                       >
-                        {copiedSummaryId === `${message.id}-long` ? (
+                        {message.summaries?.longVisible ? (
                           <>
-                            <Check className="w-4 h-4 text-green-600" />
-                            <span>Copied!</span>
+                            <span>Hide Long Summary</span>
                           </>
                         ) : (
                           <>
-                            <Copy className="w-4 h-4" />
-                            <span>Copy Summary</span>
+                            <span>Show Long Summary</span>
                           </>
                         )}
                       </button>
+                      
+                      {/* Summary Content - Visible when longVisible is true */}
+                      {message.summaries?.longVisible && (
+                        <>
+                          <p className="text-sm text-gray-700 leading-relaxed mb-4 flex-1">
+                            {message.summaries.long}
+                          </p>
+                          <button
+                            onClick={() => copySummary(message.summaries!.long, `${message.id}-long`)}
+                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 hover:border-blue-300 transition-all duration-200 text-sm font-medium mt-auto"
+                          >
+                            {copiedSummaryId === `${message.id}-long` ? (
+                              <>
+                                <Check className="w-4 h-4 text-green-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                <span>Copy Summary</span>
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
                     </div>
                   ) : (
-                    <div className="text-center">
-                      <p className="text-sm text-gray-500 mb-3">
+                    <div className="text-center flex-1 flex flex-col justify-center">
+                      <p className="text-sm text-gray-500 mb-4">
                         Generate a detailed 4-6 sentence summary
                       </p>
                       <button
                         onClick={() => onGenerateSummary?.(message.id, 'long')}
-                        className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                        className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
                       >
                         Generate Long Summary
                       </button>

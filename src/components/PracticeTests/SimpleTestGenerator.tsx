@@ -34,13 +34,13 @@ export default function SimpleTestGenerator({
   onTestGenerated, 
   userProfile 
 }: SimpleTestGeneratorProps) {
-  const [config, setConfig] = useState<TestConfiguration>({
+  const [testConfig, setTestConfig] = useState<TestConfiguration>({
     subject: '',
     topic: '',
     difficulty: 'medium',
-    questionCount: 20,
+    questionCount: 15,
     duration: 30,
-    testType: 'mcq'
+    testType: 'mixed'
   });
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -55,69 +55,78 @@ export default function SimpleTestGenerator({
 
   // Auto-fill subject if only one is available
   React.useEffect(() => {
-    if (availableSubjects.length === 1 && !config.subject) {
-      setConfig(prev => ({ ...prev, subject: availableSubjects[0].name }));
+    if (availableSubjects.length === 1 && !testConfig.subject) {
+      setTestConfig(prev => ({ ...prev, subject: availableSubjects[0].name }));
     }
-  }, [availableSubjects.length, config.subject]);
+  }, [availableSubjects.length, testConfig.subject]);
 
   // Auto-fill topic based on selected subject
   React.useEffect(() => {
-    if (config.subject) {
-      const subject = availableSubjects.find(s => s.name === config.subject);
-      if (subject && subject.topics.length > 0 && !config.topic) {
-        setConfig(prev => ({ ...prev, topic: subject.topics[0] }));
+    if (testConfig.subject) {
+      const subject = availableSubjects.find(s => s.name === testConfig.subject);
+      if (subject && subject.topics.length > 0 && !testConfig.topic) {
+        setTestConfig(prev => ({ ...prev, topic: subject.topics[0] }));
       }
     }
-  }, [config.subject, config.topic, availableSubjects]);
+  }, [testConfig.subject, testConfig.topic, availableSubjects]);
 
   const handleSubjectChange = (subject: string) => {
-    setConfig(prev => ({ ...prev, subject, topic: '' }));
+    setTestConfig(prev => ({ ...prev, subject, topic: '' }));
   };
 
   const handleTopicChange = (topic: string) => {
-    setConfig(prev => ({ ...prev, topic }));
+    setTestConfig(prev => ({ ...prev, topic }));
   };
 
   const getSubjectTopics = () => {
-    const subject = availableSubjects.find(s => s.name === config.subject);
+    const subject = availableSubjects.find(s => s.name === testConfig.subject);
     return subject?.topics || [];
   };
 
   const generateTest = useCallback(async () => {
-    if (!config.subject || !config.topic) {
-      setError('Please fill in all required fields');
+    if (!testConfig.subject || !testConfig.topic) {
+      setError('Please select both subject and topic');
       return;
     }
 
     setIsGenerating(true);
-    setError(null);
-    setGenerationProgress('🚀 Initializing test generation...');
+    setGenerationProgress('Initializing test generation...');
 
     try {
       // Simulate AI generation process
-      setGenerationProgress('📚 Analyzing curriculum and topics...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      setGenerationProgress('🧠 Generating questions with AI...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      setGenerationProgress('✅ Finalizing test structure...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Generate the test
-      const generatedTest = generatePracticeTest(config);
+      const steps = testConfig.questionCount === 0 ? 
+        ['Analyzing curriculum...', 'Determining optimal test length...', 'Generating adaptive questions...', 'Finalizing test...'] :
+        ['Analyzing curriculum...', 'Generating questions...', 'Creating answer options...', 'Finalizing test...'];
       
-      setGenerationProgress('🎉 Test generated successfully!');
+      for (let i = 0; i < steps.length; i++) {
+        setGenerationProgress(steps[i]);
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+
+      // Generate adaptive test length if 0 questions selected
+      const finalQuestionCount = testConfig.questionCount === 0 ? 
+        Math.floor(Math.random() * 20) + 10 : // Random between 10-30 for adaptive
+        testConfig.questionCount;
+
+      const test = generatePracticeTest(finalQuestionCount);
+      onTestGenerated(test);
+      setGenerationProgress('Test generated successfully!');
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      onTestGenerated(generatedTest);
-    } catch (err) {
-      console.error('Test generation failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate test');
+      setTestConfig({
+        subject: '',
+        topic: '',
+        difficulty: 'medium',
+        questionCount: 15,
+        duration: 30,
+        testType: 'mixed'
+      });
+    } catch (error) {
+      setError('Failed to generate test. Please try again.');
     } finally {
       setIsGenerating(false);
     }
-  }, [config, onTestGenerated]);
+  }, [testConfig, onTestGenerated]);
 
   const generatePracticeTest = (config: TestConfiguration): PracticeTest => {
     const questions: Question[] = [];
@@ -270,7 +279,7 @@ export default function SimpleTestGenerator({
                     Subject
                   </label>
                   <select
-                    value={config.subject}
+                    value={testConfig.subject}
                     onChange={(e) => handleSubjectChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
@@ -288,10 +297,10 @@ export default function SimpleTestGenerator({
                     Topic
                   </label>
                   <select
-                    value={config.topic}
+                    value={testConfig.topic}
                     onChange={(e) => handleTopicChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    disabled={!config.subject}
+                    disabled={!testConfig.subject}
                   >
                     <option value="">Select a topic</option>
                     {getSubjectTopics().map((topic, index) => (
@@ -300,6 +309,9 @@ export default function SimpleTestGenerator({
                       </option>
                     ))}
                   </select>
+                  {testConfig.subject && getSubjectTopics().length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">No topics available for this subject</p>
+                  )}
                 </div>
 
                 <div>
@@ -310,9 +322,9 @@ export default function SimpleTestGenerator({
                     {(['easy', 'medium', 'hard'] as const).map((level) => (
                       <button
                         key={level}
-                        onClick={() => setConfig(prev => ({ ...prev, difficulty: level }))}
+                        onClick={() => setTestConfig(prev => ({ ...prev, difficulty: level }))}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          config.difficulty === level
+                          testConfig.difficulty === level
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
@@ -327,19 +339,23 @@ export default function SimpleTestGenerator({
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Question Count
+                    Number of Questions
                   </label>
                   <input
                     type="number"
-                    min="5"
-                    max="50"
-                    value={config.questionCount}
-                    onChange={(e) => setConfig(prev => ({ 
-                      ...prev, 
-                      questionCount: parseInt(e.target.value) || 20 
+                    min="0"
+                    max="30"
+                    value={testConfig.questionCount}
+                    onChange={(e) => setTestConfig(prev => ({
+                      ...prev,
+                      questionCount: parseInt(e.target.value) || 0
                     }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Choose between 0 to 30 questions"
                   />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Choose between 0 to 30 questions (0 = adaptive test length)
+                  </p>
                 </div>
 
                 <div>
@@ -350,8 +366,8 @@ export default function SimpleTestGenerator({
                     type="number"
                     min="10"
                     max="180"
-                    value={config.duration}
-                    onChange={(e) => setConfig(prev => ({ 
+                    value={testConfig.duration}
+                    onChange={(e) => setTestConfig(prev => ({ 
                       ...prev, 
                       duration: parseInt(e.target.value) || 30 
                     }))}
@@ -367,9 +383,9 @@ export default function SimpleTestGenerator({
                     {(['mcq', 'mixed'] as const).map((type) => (
                       <button
                         key={type}
-                        onClick={() => setConfig(prev => ({ ...prev, testType: type }))}
+                        onClick={() => setTestConfig(prev => ({ ...prev, testType: type }))}
                         className={`w-full px-3 py-2 rounded-lg text-sm font-medium text-left transition-colors ${
-                          config.testType === type
+                          testConfig.testType === type
                             ? 'bg-blue-600 text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
@@ -398,7 +414,7 @@ export default function SimpleTestGenerator({
               </button>
               <button
                 onClick={generateTest}
-                disabled={!config.subject || !config.topic || isGenerating}
+                disabled={!testConfig.subject || !testConfig.topic || isGenerating}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isGenerating ? (

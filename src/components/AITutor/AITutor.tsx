@@ -441,14 +441,16 @@ You can now ask me questions and I'll provide real AI-powered responses tailored
         { subject: getCurrentActiveSubject()?.name || '' }
       );
 
-      // Update the message with the new summary
+      // Update the message with the new summary, hide the other type, and set current as visible
       setMessages(prev => prev.map(m => 
         m.id === messageId 
           ? { 
               ...m, 
               summaries: { 
-                ...m.summaries, 
-                [summaryType]: summary 
+                ...m.summaries, // Keep existing summaries
+                [summaryType]: summary, // Add/update current summary
+                [`${summaryType}Visible`]: true, // Make current summary visible
+                [`${summaryType === 'short' ? 'long' : 'short'}Visible`]: false // Hide other summary
               } 
             }
           : m
@@ -456,18 +458,28 @@ You can now ask me questions and I'll provide real AI-powered responses tailored
 
       // Track summary generation
       if (currentUser) {
-        await userBehaviorService.trackEvent(currentUser.uid, 'feature_used', {
-          featureName: 'ai_tutor_summary_generated',
-          summaryType,
-          messageId,
-          subject: getCurrentActiveSubject()?.name || ''
-        });
+        console.log('Summary generated:', { summaryType, messageId, subject: getCurrentActiveSubject()?.name || '' });
       }
 
     } catch (error) {
       console.error('Failed to generate summary:', error);
       setError('Failed to generate summary. Please try again.');
     }
+  };
+
+  // Handle summary visibility toggle
+  const handleToggleSummary = (messageId: string, summaryType: 'long' | 'short') => {
+    setMessages(prev => prev.map(m => 
+      m.id === messageId 
+        ? { 
+            ...m, 
+            summaries: { 
+              ...m.summaries, 
+              [`${summaryType}Visible`]: !m.summaries?.[`${summaryType}Visible`]
+            } 
+          }
+        : m
+    ));
   };
 
   // Get subject-specific topics for the sidebar
@@ -607,6 +619,7 @@ You can now ask me questions and I'll provide real AI-powered responses tailored
               isTyping={isTyping}
               onRetry={handleRetry}
               onGenerateSummary={handleGenerateSummary}
+              onToggleSummary={handleToggleSummary}
             />
             <div ref={messagesEndRef} />
           </div>

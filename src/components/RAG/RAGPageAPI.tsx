@@ -6,6 +6,7 @@ import { TabType } from '../../types';
 import { BookUpload } from './BookUpload';
 import { RAGChatAPI } from './RAGChatAPI';
 
+
 interface BookCardProps {
   book: Book;
   onDelete: () => void;
@@ -185,7 +186,7 @@ export default function RAGPageAPI() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Books</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalBooks}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.books}</p>
                 </div>
               </div>
             </div>
@@ -197,7 +198,7 @@ export default function RAGPageAPI() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Total Chunks</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalChunks}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.chunks}</p>
                 </div>
               </div>
             </div>
@@ -208,8 +209,8 @@ export default function RAGPageAPI() {
                   <MessageCircle className="w-6 h-6 text-purple-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Chat Sessions</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalChatSessions}</p>
+                  <p className="text-sm font-medium text-gray-600">Vector Documents</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.vectorDocuments}</p>
                 </div>
               </div>
             </div>
@@ -220,8 +221,8 @@ export default function RAGPageAPI() {
                   <Upload className="w-6 h-6 text-orange-600" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Storage Used</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.storageUsed}</p>
+                  <p className="text-sm font-medium text-gray-600">Total Embeddings</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.embeddings}</p>
                 </div>
               </div>
             </div>
